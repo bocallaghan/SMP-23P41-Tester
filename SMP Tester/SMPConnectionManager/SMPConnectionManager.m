@@ -12,15 +12,6 @@
 #import "BFSMP_TesterDB.h"
 #import "MBOLogger.h"
 
-#define kSMPServer @"gblonsup01.bluefinsolutions.com"
-#define kMBSPort    5001
-#define kRBSPort    2480
-#define kFarmID     @"0"
-#define kURLSuffix  @"/tm/?cid=%cid%"
-#define kProtocol   @"http"
-#define kDomain     @"bf"
-#define kClientID   @"0"
-
 @interface SMPConnectionManager()
 
 // An instance of our callback handler for application specific callbacks
