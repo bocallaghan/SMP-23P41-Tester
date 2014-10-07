@@ -35,6 +35,8 @@
     NSString *user;
     NSString *pass;
     NSString *activationCode;
+    
+    NSString *certificateName;
 }
 
 // Our static instance of the connection manager.
@@ -156,6 +158,13 @@ static SMPConnectionManager *connManager;
     [properties setLoginCredentials:loginCred];
     [properties setActivationCode:self->activationCode];
     
+    // Here we check if we are required to specify a certificate authority file
+    // to be used to validate the SSL termination point on our server.
+    // If the value for the certificateName is nil then we ignore it.
+    if (self->certificateName) {
+        [properties setTrustedCertificates:[self getMBSCertificateReference]];
+    }
+    
     // If the database does not exist we need to create it.
     if (![BFSMP_TesterDB databaseExists]) {
         [BFSMP_TesterDB createDatabase];
@@ -172,6 +181,29 @@ static SMPConnectionManager *connManager;
     [connProfile setAsyncReplay:YES];
     [connProfile setClientId:self->clientID];
     
+    NSString *params = nil;
+    
+    // Here we check if we are required to specify a certificate authority file
+    // to be used to validate the SSL termination point on our server.
+    // If the value for the certificateName is nil then we ignore it.
+    if (self->certificateName) {
+        
+        // Get the bundle path for the certificate authority file.
+        NSString *cer_name = [self getRBSCertificatePath];
+        
+        // Setup the stream parameters with the correct certificate.
+        params=[NSString stringWithFormat:@"trusted_certificates=%@;compression=zlib;url_suffix=%@",cer_name, self->urlSuffix];
+        
+    } else {
+        
+        // Otherwise we go with a standard URL suffix specified in the stream params.
+        params=[NSString stringWithFormat:@"compression=zlib;url_suffix=%@",self->urlSuffix];
+        
+    }
+
+    // Set the network stream parameters.
+    [connProfile setNetworkStreamParams:params];
+    
     // Register the database callback handler.
     [BFSMP_TesterDB registerCallbackHandler:self];
     
@@ -185,6 +217,38 @@ static SMPConnectionManager *connManager;
     } else {
         [app registerApplication:0];
     }
+}
+
+/*
+ * Retrieve the path to the CA file in the bundle.
+ */
+- (NSString *)getRBSCertificatePath{
+    return [[NSBundle mainBundle]pathForResource:self->certificateName ofType:@"der"];
+}
+
+/*
+ * Retrieve the CA certificate file and create a SecRef to it for use during the MBS connection.
+ */
+- (CFMutableArrayRef)getMBSCertificateReference{
+    
+    // Get the CA file from the bundle.
+    NSString *path = [[NSBundle mainBundle] pathForResource:self->certificateName ofType:@"der"];
+    
+    // Extract the NSData from the file.
+    NSData *certData = [NSData dataWithContentsOfFile:path];
+    
+    // Create a data reference.
+    CFDataRef inCertData = (__bridge CFDataRef)certData;
+    
+    // Create a SecCert from the data and store in an array.
+    SecCertificateRef caRef[1] = { SecCertificateCreateWithData(kCFAllocatorDefault, inCertData) };
+    
+    // Place the result in a mutable array which is the format that SMP is expecting.
+    CFArrayRef certsArray = CFArrayCreate(kCFAllocatorDefault, (void *)caRef, 1, NULL);
+    CFMutableArrayRef mutArray = CFArrayCreateMutableCopy(kCFAllocatorDefault, 1, certsArray);
+    
+    // Return the array.
+    return mutArray;
 }
 
 // =========================================================================
